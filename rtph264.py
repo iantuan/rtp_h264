@@ -11,10 +11,51 @@ START_BYTES = "\x00\x00\x00\x01"
 
 class RFC3984(object):
 
-    def __init__(self):
-   
-    def parse_frame(self, payload):
-  
+    def parse_frame(self, pay):
+
+        frame = None
+
+        bt = bitstring.BitArray(bytes=pay)
+
+        bc = 0; lc=0;
+ 
+        fb=bt[bc] # i.e. "F"
+        nri=bt[bc+1:bc+3].uint # "NRI"
+        nlu0=bt[bc:bc+3] # "3 NAL UNIT BITS" (i.e. [F | NRI])
+        typ=bt[bc+3:bc+8].uint # "Type"
+
+        print "F, NRI, Type :", fb, nri, typ
+        #print "nlu0 : ", nlu0 
+
+        bc+=8; lc+=1;
+
+        start=bt[bc] # start bit
+        end=bt[bc+2] # end bit
+        nlu1=bt[bc+3:bc+8] # 5 nal unit bits
+
+        nlu = nlu0+nlu1
+        head = START_BYTES + nlu.bytes
+        print ">>>type", typ
+        if (typ >= TYPE_SINGLE_NALU_01) and (typ <= TYPE_SINGLE_NALU_23):
+            print ">>> Single NALU", start
+            #frame = head+pay[lc:]
+            frame = START_BYTES + pay[lc:] 
+        elif typ == TYPE_NALU_FUA:
+            if (start):
+                print ">>> First FUA"
+                lc+=1 
+                frame = head+pay[lc:]
+            else:
+                print ">>> FUA" 
+                lc+=1
+                frame = pay[lc:]
+            
+        
+        else:
+            print ">>> Else"
+
+        return frame, typ
+
 class RTP(object):
 
     def __init__(self, file_name):
@@ -23,6 +64,10 @@ class RTP(object):
         self._payload_type = None
 
         self._file = open(file_name, 'wb')
+
+        self._rfc3984 = RFC3984()
+        
+        self._first_fua = False
 
     def parse_hader(self, pkt):
 
@@ -66,43 +111,14 @@ class RTP(object):
             hst=bt[bc:bc+32*hlen]
             bc+=32*hlen; lc+=4*hlen;
 
-        fb=bt[bc] # i.e. "F"
-        nri=bt[bc+1:bc+3].uint # "NRI"
-        nlu0=bt[bc:bc+3] # "3 NAL UNIT BITS" (i.e. [F | NRI])
-        typ=bt[bc+3:bc+8].uint # "Type"
-
-        print "F, NRI, Type :", fb, nri, typ
-        #print "nlu0 : ", nlu0 
-
-        bc+=8; lc+=1;
-
-        start=bt[bc] # start bit
-        end=bt[bc+2] # end bit
-        nlu1=bt[bc+3:bc+8] # 5 nal unit bits
-
-        nlu = nlu0+nlu1
-        head = START_BYTES + nlu.bytes
-        print ">>>type", typ
-        if (typ >= TYPE_SINGLE_NALU_01) and (typ <= TYPE_SINGLE_NALU_23):
-            print ">>> Single NALU", start
-            #frame = head+pkt[lc:]
-            frame = START_BYTES + pkt[lc:] 
-            self._file.write(frame)     
-        elif typ == TYPE_NALU_FUA:
-            if (start):
-                print ">>> First FUA"
-                lc+=1 
-                frame = head+pkt[lc:]
-            else:
-                print ">>> FUA" 
-                lc+=1
-                frame = pkt[lc:]
-            
-            self._file.write(frame)  
-
-        else:
-            print ">>> Else"
-
+        frame, frame_type = self._rfc3984.parse_frame(pkt[lc:])
+   
+        #if frame_type == TYPE_NALU_FUA:
+        #    self._first_fua = True
+  
+        if frame != None and frame_type == TYPE_NALU_FUA:
+            self._file.write(frame)
+   
     def recv_pkt(self, pkt):
        self.parse_hader(pkt)
 
