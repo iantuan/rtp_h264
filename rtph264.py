@@ -124,11 +124,8 @@ class RTP(object):
         print "version, p, x, cc, m, pt",version,p,x,cc,m,pt 
         print "sequence number, timestamp",sn,timestamp
 
-        if self._rtp_sn == -1:
-            # first rtp packet we received
-            self._rtp_sn = sn
-        
-                      
+        self._rtp_sn = sn
+                         
         lc=12 # so, we have red twelve bytes
         bc=12*8 # .. and that many bits
 
