@@ -53,8 +53,6 @@ class RFC3984(object):
             else:
                 print ">>> FUA", nlu1.uint 
                 frame = pay[lc:]     
-        else:
-            print ">>> Else"
 
         return frame
 
@@ -162,6 +160,7 @@ def main():
         if not data:
             print "client has exist"
             break
+        print len(data)
         rtp_parser.recv_pkt(data)
 
     s.close()
