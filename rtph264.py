@@ -29,6 +29,12 @@ class RFC3984(object):
 
         print "F, NRI, Type :", fb, nri, typ
         #print "nlu0 : ", nlu0 
+        print ">>>type", typ
+
+        if (typ >= TYPE_SINGLE_NALU_01) and (typ <= TYPE_SINGLE_NALU_23):
+            print ">>> Single NALU", typ
+            #frame = head+pay[lc:]
+            frame = START_BYTES + pay[lc:] 
 
         bc+=8; lc+=1;
 
@@ -38,26 +44,19 @@ class RFC3984(object):
 
         nlu = nlu0+nlu1
         head = START_BYTES + nlu.bytes
-        print ">>>type", typ
-        if (typ >= TYPE_SINGLE_NALU_01) and (typ <= TYPE_SINGLE_NALU_23):
-            print ">>> Single NALU", start
-            #frame = head+pay[lc:]
-            frame = START_BYTES + pay[lc:] 
-        elif typ == TYPE_NALU_FUA:
+        bc+=8; lc+=1;
+
+        if typ == TYPE_NALU_FUA:
             if (start):
-                print ">>> First FUA"
-                lc+=1 
+                print ">>> First FUA", nlu1.uint
                 frame = head+pay[lc:]
             else:
-                print ">>> FUA" 
-                lc+=1
-                frame = pay[lc:]
-            
-        
+                print ">>> FUA", nlu1.uint 
+                frame = pay[lc:]     
         else:
             print ">>> Else"
 
-        return frame, typ
+        return frame
 
 class RTP(object):
 
@@ -74,7 +73,7 @@ class RTP(object):
         self._first_fua = False
 
     def parse_csrc(self, pkt, cc, lc):
-        bt = bitstringBitArray(bytes=pkt) 
+        bt = bitstring.BitArray(bytes=pkt) 
         cids = []
         bc = 8*lc
         for i in range(cc):
@@ -87,7 +86,7 @@ class RTP(object):
     #if extend header flag raise, we need to parse extend header
     def parse_ext_hdr(self, pkt, lc):
         # this section haven't been tested.. might fail
-        bt = bitstringBitArray(bytes=pkt) 
+        bt = bitstring.BitArray(bytes=pkt) 
         bc = 8*lc
         hid=bt[bc:bc+16].uint
         bc+=16; lc+=2;
@@ -133,7 +132,7 @@ class RTP(object):
         lc=12 # so, we have red twelve bytes
         bc=12*8 # .. and that many bits
 
-        lc = self.parse_csrc(pkt, lc)
+        lc = self.parse_csrc(pkt, cc, lc)
 
         if (x):
             lc = self.parse_ext_hdr(pkt[lc:], bc , lc)
