@@ -1,5 +1,7 @@
 import socket
 import bitstring
+from optparse import OptionParser
+
 
 MAX_RTP_PKT_LEN = 1500
 MAX_RTP_SEQ_NUM = 65535
@@ -146,14 +148,24 @@ class RTP(object):
 
 
 def main():
+    usage = "usage: %prog [options] arg"
+
+    parser = OptionParser(usage)
+
+    parser.add_option("-f", "--file", default="input.264")
+
+    (options, args) = parser.parse_args()
+
+    output_file = options.file
+    if output_file == "":
+        print "wrong file name"
+        sys.exit()
+
     address = ('127.0.0.1', 1236)
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind(address)
-    #startbytes = "\x00\x00\x00\x01"X
-    #x = bitstring.BitArray(bytes = startbytes)
-    #y=len(x)
-    #print y
-    rtp_parser = RTP("input.264")
+
+    rtp_parser = RTP(output_file)
 
     while True:
         data, addr = s.recvfrom(MAX_RTP_PKT_LEN)
