@@ -1,13 +1,16 @@
 import socket
 import bitstring
 
-MAX_RTP_PKT_LEN = 4096
+MAX_RTP_PKT_LEN = 1500
+MAX_RTP_SEQ_NUM = 65535
 
 TYPE_SINGLE_NALU_01 = 1
 TYPE_SINGLE_NALU_23 = 23
 TYPE_STAPA = 24
 TYPE_NALU_FUA = 28
 START_BYTES = "\x00\x00\x00\x01"
+
+PT_H264 = 96
 
 class RFC3984(object):
 
@@ -60,14 +63,44 @@ class RTP(object):
 
     def __init__(self, file_name):
         self._first_pkt = False
-        self._rtp_sn = 0
+        self._rtp_sn = -1
         self._payload_type = None
 
         self._file = open(file_name, 'wb')
 
+        self._codec_depay = { PT_H264: RFC3984}
         self._rfc3984 = RFC3984()
         
         self._first_fua = False
+
+    def parse_csrc(self, pkt, cc, lc):
+        bt = bitstringBitArray(bytes=pkt) 
+        cids = []
+        bc = 8*lc
+        for i in range(cc):
+            cids.append(bt[bc:bc+32].uint)
+            bc+=32; lc+=4;
+        print "csrc identifiers:",cids
+
+        return lc
+ 
+    #if extend header flag raise, we need to parse extend header
+    def parse_ext_hdr(self, pkt, lc):
+        # this section haven't been tested.. might fail
+        bt = bitstringBitArray(bytes=pkt) 
+        bc = 8*lc
+        hid=bt[bc:bc+16].uint
+        bc+=16; lc+=2;
+
+        hlen=bt[bc:bc+16].uint
+        bc+=16; lc+=2;
+
+        print "ext. header id, header len",hid,hlen
+
+        hst=bt[bc:bc+32*hlen]
+        bc+=32*hlen; lc+=4*hlen;
+
+        return lc
 
     def parse_hader(self, pkt):
 
@@ -86,37 +119,29 @@ class RTP(object):
         timestamp=bt[32:64].uint # timestamp
         ssrc=bt[64:96].uint # ssrc identifier
 
-
+        if pt in self._codec_depay:
+            codec_depay = self._codec_depay[pt]()
+ 
         print "version, p, x, cc, m, pt",version,p,x,cc,m,pt 
         print "sequence number, timestamp",sn,timestamp
 
+        if self._rtp_sn == -1:
+            # first rtp packet we received
+            self._rtp_sn = sn
+        
+                      
         lc=12 # so, we have red twelve bytes
         bc=12*8 # .. and that many bits
-        cids=[]
-        for i in range(cc):
-            cids.append(bt[bc:bc+32].uint)
-            bc+=32; lc+=4;
-        print "csrc identifiers:",cids
- 
+
+        lc = self.parse_csrc(pkt, lc)
+
         if (x):
-            # this section haven't been tested.. might fail
-            hid=bt[bc:bc+16].uint
-            bc+=16; lc+=2;
-
-            hlen=bt[bc:bc+16].uint
-            bc+=16; lc+=2;
-
-            print "ext. header id, header len",hid,hlen
-
-            hst=bt[bc:bc+32*hlen]
-            bc+=32*hlen; lc+=4*hlen;
-
-        frame, frame_type = self._rfc3984.parse_frame(pkt[lc:])
+            lc = self.parse_ext_hdr(pkt[lc:], bc , lc)
+            bc = 8*lc
+ 
+        frame = self._rfc3984.parse_frame(pkt[lc:])
    
-        #if frame_type == TYPE_NALU_FUA:
-        #    self._first_fua = True
-  
-        if frame != None and frame_type == TYPE_NALU_FUA:
+        if frame != None:
             self._file.write(frame)
    
     def recv_pkt(self, pkt):
